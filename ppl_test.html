@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="sr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PPL Test Simulator</title>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --primary: #4A90E2;
+      --primary-dark: #357ABD;
+      --secondary: #50E3C2;
+      --bg: #F7F9FC;
+      --card-bg: #FFFFFF;
+      --text: #333333;
+      --error: #E74C3C;
+      --success: #27AE60;
+      --font: 'Poppins', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); line-height: 1.6; }
+    .container { max-width: 800px; margin: 40px auto; padding: 0 20px; }
+    header { text-align: center; margin-bottom: 30px; }
+    header h1 { font-weight: 600; font-size: 2.5rem; margin-bottom: 10px; }
+    #timer { background: var(--secondary); color: #fff; display: inline-block; font-weight: 500; padding: 8px 16px; border-radius: 50px; }
+    /* Selector */
+    #test-selector { display: flex; justify-content: center; align-items: center; gap: 12px; margin-bottom: 10px; }
+    #test-selector select { padding: 10px 14px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; }
+    #test-selector button { padding: 10px 20px; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: background .2s; }
+    #test-selector button:hover { background: var(--primary-dark); }
+    .feedback.error { color: var(--error); margin: 10px 0; text-align: center; }
+    .feedback.success { color: var(--success); margin: 10px 0; text-align: center; }
+    /* Live Feedback */
+    #live-feedback { text-align: right; margin-bottom: 12px; font-weight: 500; }
+    /* Questions */
+    .question { background: var(--card-bg); border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+    .question p { font-weight: 500; margin-bottom: 15px; }
+    .answers label { display: flex; align-items: center; background: #F0F4F8; border-radius: 8px; margin-bottom: 10px; padding: 12px; cursor: pointer; transition: background .2s; }
+    .answers input[type="radio"] { margin-right: 12px; accent-color: var(--primary); }
+    .answers label:hover { background: #E8EFF7; }
+    /* Submit */
+    #test-form button[type="submit"] { display: block; margin: 20px auto; padding: 12px 24px; background: var(--primary); color: #fff; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer; transition: background .2s; }
+    #test-form button[type="submit"]:hover { background: var(--primary-dark); }
+    /* Result & Review */
+    #result-box, #review-box { background: var(--card-bg); border-radius: 12px; padding: 30px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); margin-bottom: 30px; text-align: center; }
+    .result-text { font-size: 1.4rem; font-weight: 600; margin-bottom: 20px; }
+    #result-box button, #review-box button { padding: 10px 20px; margin: 8px; font-size: 1rem; background: var(--primary); color: #fff; border: none; border-radius: 8px; cursor: pointer; transition: background .2s; }
+    #result-box button:hover, #review-box button:hover { background: var(--primary-dark); }
+    /* Review Items */
+    .review-item { margin-bottom: 20px; text-align: left; }
+    .review-item p { margin-bottom: 8px; }
+    .correct { color: var(--success); font-weight: 500; }
+    .incorrect { color: var(--error); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>PPL Test Simulator</h1>
+      <div id="timer">Preostalo vreme: <span id="timer-display">30:00</span></div>
+    </header>
+
+    <div id="test-selector">
+      <select id="category-select"><option value="">Izaberi test</option></select>
+      <button id="start-btn">Počni test</button>
+    </div>
+    <div id="selector-error" class="feedback error" style="display:none;">Molimo izaberite kategoriju testa.</div>
+
+    <form id="test-form" style="display:none;">
+      <div id="live-feedback">Odgovoreno 0/20</div>
+      <div id="questions-container"></div>
+      <div id="form-error" class="feedback error" style="display:none;"></div>
+      <button type="submit">Pošalji odgovore</button>
+    </form>
+
+    <div id="result-box" style="display:none;">
+      <div class="result-text" id="score-text"></div>
+      <button id="review-btn">Pregled odgovora</button>
+      <button id="new-test-btn">Novi test</button>
+    </div>
+
+    <div id="review-box" style="display:none;">
+      <div class="result-text">Pregled odgovora</div>
+      <div id="review-container"></div>
+      <button id="new-test-btn-2">Novi test</button>
+    </div>
+  </div>
+
+  <script>
+    let allData = [], currentQuestions = [];
+    const MAX_QUESTIONS = 20;
+    let timerInterval;
+
+    async function loadData() {
+      try {
+        const res = await fetch('ppl_svi_testovi_obelezeno.json');
+        if (!res.ok) throw new Error(res.status);
+        allData = await res.json();
+        const categories = [...new Set(allData.map(q => q.category))];
+        const select = document.getElementById('category-select');
+        categories.forEach(cat => {
+          const opt = document.createElement('option'); opt.value = cat; opt.textContent = cat; select.append(opt);
+        });
+      } catch (e) {
+        alert('Greška pri učitavanju pitanja.'); console.error(e);
+      }
+    }
+
+    function shuffle(arr) {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    }
+
+    function startTimer(sec) {
+      let remaining = sec;
+      const disp = document.getElementById('timer-display');
+      timerInterval = setInterval(() => {
+        if (remaining <= 0) { clearInterval(timerInterval); submitTest(); return; }
+        remaining--;
+        const m = Math.floor(remaining / 60).toString().padStart(2, '0');
+        const s = (remaining % 60).toString().padStart(2, '0');
+        disp.textContent = `${m}:${s}`;
+      }, 1000);
+    }
+
+    document.getElementById('start-btn').addEventListener('click', () => {
+      const cat = document.getElementById('category-select').value;
+      const selErr = document.getElementById('selector-error');
+      if (!cat) { selErr.style.display = 'block'; return; } selErr.style.display = 'none';
+
+      currentQuestions = allData.filter(q => q.category === cat);
+      shuffle(currentQuestions);
+      currentQuestions = currentQuestions.slice(0, MAX_QUESTIONS);
+      renderQuestions();
+      document.getElementById('test-selector').style.display = 'none';
+      document.getElementById('test-form').style.display = 'block';
+      updateLiveFeedback();
+      startTimer(30 * 60);
+    });
+
+    function renderQuestions() {
+      const cont = document.getElementById('questions-container'); cont.innerHTML = '';
+      currentQuestions.forEach((q, i) => {
+        const div = document.createElement('div'); div.className = 'question';
+        const pq = document.createElement('p'); pq.textContent = `${i+1}. ${q.question}`; div.append(pq);
+        const ansDiv = document.createElement('div'); ansDiv.className = 'answers';
+        const ans = [...q.answers]; shuffle(ans);
+        ans.forEach((a, j) => {
+          const id = `q${i}_a${j}`;
+          const label = document.createElement('label'); label.htmlFor = id;
+          const r = document.createElement('input'); r.type = 'radio'; r.name = `q${i}`; r.id = id; r.value = a.correct;
+          r.addEventListener('change', updateLiveFeedback);
+          const span = document.createElement('span'); span.textContent = ` ${a.text}`;
+          label.append(r, span); ansDiv.append(label);
+        }); div.append(ansDiv); cont.append(div);
+      });
+    }
+
+    function updateLiveFeedback() {
+      const total = currentQuestions.length;
+      let ansCount = 0;
+      currentQuestions.forEach((_, i) => {
+        if (document.querySelector(`input[name=q${i}]:checked`)) ansCount++;
+      });
+      document.getElementById('live-feedback').textContent = `Odgovoreno ${ansCount}/${total}`;
+    }
+
+    function submitTest() {
+      clearInterval(timerInterval);
+      const total = currentQuestions.length;
+      let correct = 0; const answered = [];
+      currentQuestions.forEach((q, i) => {
+        const sel = document.querySelector(`input[name=q${i}]:checked`);
+        if (sel) { answered.push(i); if (sel.value === 'true') correct++; }
+      });
+      const fErr = document.getElementById('form-error'); fErr.style.display = 'none';
+      if (answered.length / total < 0.75) {
+        fErr.textContent = 'Molimo odgovorite na bar 75% pitanja.'; fErr.style.display = 'block'; return;
+      }
+      document.getElementById('score-text').textContent =
+        `Rezultat: ${correct}/${total} (${((correct/total)*100).toFixed(1)}%)`;
+      document.getElementById('test-form').style.display = 'none';
+      document.getElementById('result-box').style.display = 'block';
+    }
+
+    document.getElementById('review-btn').addEventListener('click', () => {
+      const rc = document.getElementById('review-container'); rc.innerHTML = '';
+      currentQuestions.forEach((q, i) => {
+        const div = document.createElement('div'); div.className = 'review-item';
+        const pq = document.createElement('p'); pq.textContent = `${i+1}. ${q.question}`;
+        const sel = document.querySelector(`input[name=q${i}]:checked`);
+        const userA = sel ? sel.nextSibling.textContent.trim() : 'Niste odgovorili';
+        const correctA = q.answers.find(a => a.correct).text;
+        const pu = document.createElement('p'); pu.innerHTML = `Vaš odgovor: <span class="${sel && sel.value==='true'?'correct':'incorrect'}">${userA}</span>`;
+        const pc = document.createElement('p'); pc.innerHTML = `Tačan odgovor: <span class="correct">${correctA}</span>`;
+        div.append(pq, pu, pc); rc.append(div);
+      });
+      document.getElementById('result-box').style.display = 'none';
+      document.getElementById('review-box').style.display = 'block';
+    });
+
+    document.querySelectorAll('#new-test-btn, #new-test-btn-2').forEach(btn => btn.addEventListener('click', () => location.reload()));
+
+    loadData();
+  </script>
+</body>
+</html>
