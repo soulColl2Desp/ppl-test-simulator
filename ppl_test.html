@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PPL Test Simulator</title>
+  <title>PPL Test Simulator 2</title>
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet" />
   <style>
@@ -204,6 +204,11 @@
 
     document.querySelectorAll('#new-test-btn, #new-test-btn-2').forEach(btn => btn.addEventListener('click', () => location.reload()));
 
+        // Submit form to show results
+    document.getElementById('test-form').addEventListener('submit', function(e) {
+      e.preventDefault();
+      submitTest();
+    });
     loadData();
   </script>
 </body>
